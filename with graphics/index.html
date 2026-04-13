@@ -75,6 +75,9 @@
       </div>
 
       <div class="start-actions">
+        <button id="btn-music-toggle" class="btn btn-music-off btn-lg" type="button" aria-label="Toggle background music" title="Toggle Music">
+          🔇 Music: OFF
+        </button>
         <button id="btn-start" class="btn btn-primary btn-lg" type="button" aria-label="Start from Level 1">
           🚀 Start from Level 1
         </button>
@@ -108,9 +111,10 @@
           </div>
         </div>
 
-        <button id="btn-menu-go" class="btn btn-secondary btn-sm" type="button" aria-label="Return to main menu">
-          ← Menu
-        </button>
+        <div class="hud-right-actions">
+          <button id="btn-mute" class="btn btn-icon btn-sm" type="button" aria-label="Toggle mute" title="Toggle Sound">🔊</button>
+          <button id="btn-menu-go" class="btn btn-secondary btn-sm" type="button" aria-label="Return to main menu">← Menu</button>
+        </div>
       </header>
 
       <!-- Two-Panel Body -->
@@ -293,6 +297,7 @@
   </div><!-- /game-root -->
 
   <!-- Scripts -->
+  <script src="js/sound.js"></script>
   <script src="js/fields.js"></script>
   <script src="js/hangman.js"></script>
   <script src="js/game.js"></script>

@@ -53,6 +53,8 @@ const Game = (() => {
     PaperPile.init();
     bindEvents();
     initCarouselDrag();
+    // Sync in-game mute button to match default muted state (OFF)
+    syncMuteBtn();
   }
 
   // ── CAROUSEL: VIRTUAL INFINITE SCROLL ────────────────────────
@@ -186,6 +188,7 @@ const Game = (() => {
       card.addEventListener('click', () => {
         // Ignore click if it was the end of a drag
         if (grid._wasDragging) return;
+        SoundManager.playButton();
         startLevel(i);
       });
       grid.appendChild(card);
@@ -198,6 +201,7 @@ const Game = (() => {
       clone.setAttribute('aria-hidden', 'true');
       clone.addEventListener('click', () => {
         if (grid._wasDragging) return;
+        SoundManager.playButton();
         startLevel(i);
       });
       grid.appendChild(clone);
@@ -220,6 +224,13 @@ const Game = (() => {
 
     const level = LEVELS[levelIndex];
     PaperPile.reset();
+
+    // Switch background music: boss track for Level 8, ambient for all others
+    if (level.isBoss) {
+      SoundManager.startBoss();
+    } else {
+      SoundManager.startAmbient();
+    }
 
     // Set level header
     setText('current-level-label', `Level ${level.id} — ${level.title}`);
@@ -268,7 +279,10 @@ const Game = (() => {
       const input = $('field-input');
       if (input) {
         input.focus();
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitField(); });
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { submitField(); }
+          else { SoundManager.playTyping(); }
+        });
       }
       const togglePw = $('toggle-pw');
       if (togglePw) {
@@ -325,6 +339,9 @@ const Game = (() => {
     addScore(Math.max(earned, 10));
     state.attemptsOnField = 0;
 
+    // Sound: correct field
+    SoundManager.playSuccess();
+
     // Feedback
     showFeedback('✅ Correct! +' + Math.round(pts * state.multiplier) + ' pts', 'correct');
 
@@ -346,6 +363,9 @@ const Game = (() => {
     state.streak = 0;
     state.multiplier = 1;
     state.attemptsOnField++;
+
+    // Sound: wrong field
+    SoundManager.playFailure();
 
     // Lose a life
     state.lives--;
@@ -399,6 +419,9 @@ const Game = (() => {
       }
     }
 
+    // Sound: level complete fanfare
+    SoundManager.playLevelWin();
+
     showScreen('level-complete');
   }
 
@@ -408,6 +431,13 @@ const Game = (() => {
     setText('gameover-level', `Failed at: Level ${level.id} — ${level.title}`);
     setText('gameover-score', `Final Score: ${state.score}`);
     setText('gameover-msg', '📄 You\'ve been buried under rejected forms. The pile won.');
+
+    // Sound: game over
+    SoundManager.playLevelFail();
+
+    // Return to ambient so failure sound isn't masked by boss music
+    SoundManager.startAmbient();
+
     showScreen('game-over');
   }
 
@@ -539,51 +569,99 @@ const Game = (() => {
     }
   }
 
+  // ── SYNC MUTE BUTTON STATE ───────────────────────────────────
+  // Keeps the in-game HUD mute button in sync with SoundManager state
+  function syncMuteBtn() {
+    const btn = $('btn-mute');
+    if (!btn) return;
+    const isMuted = SoundManager.isMuted();
+    btn.textContent = isMuted ? '🔇' : '🔊';
+    btn.title = isMuted ? 'Unmute' : 'Mute';
+  }
+
   // ── EVENT BINDING ─────────────────────────────────────────────
   function bindEvents() {
+    // Helper: play button click sound then run action
+    function btnClick(id, fn) {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('click', () => { SoundManager.playButton(); fn(); });
+    }
+
+    // Submit — success/failure SFX come from onCorrect/onWrong
     const sb = $('btn-submit-field');
     if (sb) sb.addEventListener('click', submitField);
 
-    const ruleBtn = $('btn-show-rule');
-    if (ruleBtn) ruleBtn.addEventListener('click', useShowRule);
+    btnClick('btn-show-rule',   useShowRule);
+    btnClick('btn-show-format', useShowFormat);
+    btnClick('btn-skip',        useSkipField);
 
-    const fmtBtn = $('btn-show-format');
-    if (fmtBtn) fmtBtn.addEventListener('click', useShowFormat);
+    btnClick('btn-start', () => startLevel(0));
+    btnClick('btn-retry', () => startLevel(state.currentLevel));
 
-    const skipBtn = $('btn-skip');
-    if (skipBtn) skipBtn.addEventListener('click', useSkipField);
+    btnClick('btn-menu-go',            () => { SoundManager.startAmbient(); renderLevelSelect(); showScreen('start'); });
+    btnClick('btn-menu-from-complete', () => { SoundManager.startAmbient(); renderLevelSelect(); showScreen('start'); });
+    btnClick('btn-menu-from-over',     () => { SoundManager.startAmbient(); renderLevelSelect(); showScreen('start'); });
+    btnClick('btn-menu-from-win',      () => { SoundManager.startAmbient(); renderLevelSelect(); showScreen('start'); });
 
-    const startBtn = $('btn-start');
-    if (startBtn) startBtn.addEventListener('click', () => startLevel(0));
-
-    const retryBtn = $('btn-retry');
-    if (retryBtn) retryBtn.addEventListener('click', () => startLevel(state.currentLevel));
-
-    const menuBtn1 = $('btn-menu-go');
-    if (menuBtn1) menuBtn1.addEventListener('click', () => { renderLevelSelect(); showScreen('start'); });
-
-    const menuBtnComplete = $('btn-menu-from-complete');
-    if (menuBtnComplete) menuBtnComplete.addEventListener('click', () => { renderLevelSelect(); showScreen('start'); });
-
-    const menuBtn2 = $('btn-menu-from-over');
-    if (menuBtn2) menuBtn2.addEventListener('click', () => { renderLevelSelect(); showScreen('start'); });
-
-    const menuBtn3 = $('btn-menu-from-win');
-    if (menuBtn3) menuBtn3.addEventListener('click', () => { renderLevelSelect(); showScreen('start'); });
-
-    const playAgain = $('btn-play-again');
-    if (playAgain) playAgain.addEventListener('click', () => {
+    btnClick('btn-play-again', () => {
       state.completedLevels = [];
       state.score = 0;
+      SoundManager.startAmbient();
       renderLevelSelect();
       showScreen('start');
     });
 
-    const closeHint = $('btn-close-hint');
-    if (closeHint) closeHint.addEventListener('click', () => {
+    btnClick('btn-close-hint', () => {
       const box = $('hint-box');
       if (box) box.classList.add('hidden');
     });
+
+    // ── START SCREEN: Music OFF/ON button ─────────────────────
+    const musicToggle = $('btn-music-toggle');
+    if (musicToggle) {
+      musicToggle.addEventListener('click', () => {
+        // This click IS the user gesture — safe to unlock Web Audio now
+        SoundManager.unlock();
+        const nowMuted = SoundManager.toggleMute(); // toggles false → true → false
+        if (!nowMuted) {
+          // Music just turned ON — start ambient immediately
+          SoundManager.startAmbient();
+          musicToggle.textContent = '🔊 Music: ON';
+          musicToggle.classList.remove('btn-music-off');
+          musicToggle.classList.add('btn-music-on');
+        } else {
+          // Music turned back OFF
+          SoundManager.stopBg();
+          musicToggle.textContent = '🔇 Music: OFF';
+          musicToggle.classList.remove('btn-music-on');
+          musicToggle.classList.add('btn-music-off');
+        }
+        syncMuteBtn(); // keep in-game mute btn in sync
+      });
+    }
+
+    // ── IN-GAME HUD: Mute toggle button ───────────────────────
+    const muteBtn = $('btn-mute');
+    if (muteBtn) {
+      muteBtn.addEventListener('click', () => {
+        const nowMuted = SoundManager.toggleMute();
+        syncMuteBtn();
+        // Also sync the start-screen music button label
+        const mt = $('btn-music-toggle');
+        if (mt) {
+          if (nowMuted) {
+            mt.textContent = '🔇 Music: OFF';
+            mt.classList.remove('btn-music-on');
+            mt.classList.add('btn-music-off');
+          } else {
+            mt.textContent = '🔊 Music: ON';
+            mt.classList.remove('btn-music-off');
+            mt.classList.add('btn-music-on');
+          }
+        }
+      });
+    }
   }
 
   // ── PUBLIC ────────────────────────────────────────────────────
